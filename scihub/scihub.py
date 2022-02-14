@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
@@ -18,6 +19,8 @@ import urllib3
 from bs4 import BeautifulSoup
 from retrying import retry
 
+from scholarly import scholarly
+
 # log config
 logging.basicConfig()
 logger = logging.getLogger('Sci-Hub')
@@ -32,7 +35,7 @@ HEADERS = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:27.0) Gecko/2010010
 
 class SciHub(object):
     """
-    SciHub class can search for papers on Google Scholars 
+    SciHub class can search for papers on Google Scholars
     and fetch/download papers from sci-hub.io
     """
 
@@ -77,6 +80,10 @@ class SciHub(object):
         Performs a query on scholar.google.com, and returns a dictionary
         of results in the form {'papers': ...}. Unfortunately, as of now,
         captchas can potentially prevent searches after a certain limit.
+
+
+        change to use pip install scholarly
+
         """
         start = 0
         results = {'papers': []}
@@ -144,7 +151,7 @@ class SciHub(object):
         try:
             url = self._get_direct_url(identifier)
 
-            # verify=False is dangerous but sci-hub.io 
+            # verify=False is dangerous but sci-hub.io
             # requires intermediate certificates to verify
             # and requests doesn't know how to download them.
             # as a hacky fix, you can add them to your store
@@ -234,7 +241,7 @@ class SciHub(object):
 
     def _generate_name(self, res):
         """
-        Generate unique filename for paper. Returns a name by calcuating 
+        Generate unique filename for paper. Returns a name by calcuating
         md5 hash of file contents, then appending the last 20 characters
         of the url which typically provides a good paper identifier.
         """
@@ -242,6 +249,42 @@ class SciHub(object):
         name = re.sub('#view=(.+)', '', name)
         pdf_hash = hashlib.md5(res.content).hexdigest()
         return '%s-%s' % (pdf_hash, name[-20:])
+
+    def _search_publication_information(self, identifier):
+        """
+        Uses scholarly to find publication information
+
+{'author_id': ['', '', '', ''],
+ 'bib': {'abstract': 'The 2013 guidelines on hypertension of the European '
+                     'Society of Hypertension (ESH) and the  European Society '
+                     'of Cardiology (ESC) follow the guidelines jointly issued '
+                     'by the two societies  in 2003 and 2007. 1, 2 Publication '
+                     'of a new document 6 years after the previous one',
+         'author': ['ES Council', 'J Redon', 'K Narkiewicz', 'PM Nilsson'],
+         'pub_year': '2013',
+         'title': '2013 ESH/ESC guidelines for the management of arterial '
+                  'hypertension',
+         'venue': 'European Heart …'},
+ 'citedby_url': '/scholar?cites=2024581817338419954&as_sdt=5,33&sciodt=0,33&hl=en',
+ 'eprint_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
+ 'filled': False,
+ 'gsrank': 1,
+ 'num_citations': 93,
+ 'pub_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
+ 'source': 'PUBLICATION_SEARCH_SNIPPET',
+ 'url_add_sclib': '/citations?hl=en&xsrf=&continue=/scholar%3Fq%3D10.1093/eurheartj/eht151%250A%26hl%3Den%26as_sdt%3D0,33&citilm=1&update_op=library_add&info=8torqW_CGBwJ&ei=-FMKYu6YDomTy9YPj926gA8&json=',
+ 'url_related_articles': '/scholar?q=related:8torqW_CGBwJ:scholar.google.com/&scioq=10.1093/eurheartj/eht151%0A&hl=en&as_sdt=0,33',
+ 'url_scholarbib': '/scholar?q=info:8torqW_CGBwJ:scholar.google.com/&output=cite&scirp=0&hl=en'}
+
+
+
+
+        """
+        search_query = scholarly.search_pubs(identifier)
+        scholarly.pprint(next(search_query))
+
+        return "Test"
+
 
 class CaptchaNeedException(Exception):
     pass
@@ -262,7 +305,6 @@ def main():
     parser.add_argument('-o', '--output', metavar='path', help='directory to store papers', default='', type=str)
     parser.add_argument('-v', '--verbose', help='increase output verbosity', action='store_true')
     parser.add_argument('-p', '--proxy', help='via proxy format like socks5://user:pass@host:port', action='store', type=str)
-
     args = parser.parse_args()
 
     if args.verbose:
@@ -296,14 +338,24 @@ def main():
                 else:
                     logger.debug('Successfully downloaded file with identifier %s', paper['url'])
     elif args.file:
-        with open(args.file, 'r') as f:
-            identifiers = f.read().splitlines()
-            for identifier in identifiers:
-                result = sh.download(identifier, args.output)
-                if 'err' in result:
-                    logger.debug('%s', result['err'])
-                else:
-                    logger.debug('Successfully downloaded file with identifier %s', identifier)
+        f = open(args.file, 'r')
+        identifiers = f.readlines()
+        for identifier in identifiers:
+            result = sh.download(identifier, args.output)
+            if 'err' in result:
+                logger.debug('%s', result['err'])
+            else:
+                logger.debug('Successfully downloaded file with identifier %s', identifier)
+                identifiers.remove(identifier)
+                print('Removing ' + identifier)
+                #Now call function that IDs the paper and gets metadata - return a list of metadata
+                publication_info = sh._search_publication_information(identifier)
+
+                #Now call function that renames file according to my schema - based on list of metadata (if available)
+
+        f = open(args.file, "w")
+        f.writelines(identifiers)
+        f.close()
 
 
 if __name__ == '__main__':
