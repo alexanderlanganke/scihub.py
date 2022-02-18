@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-"""
-Sci-API Unofficial API
-[Search|Download] research papers from [scholar.google.com|sci-hub.io].
-
-@author zaytoun
-"""
 
 import re
 import argparse
 import hashlib
 import logging
 import os
+import shutil
 
 import requests
 import urllib3
@@ -80,10 +73,6 @@ class SciHub(object):
         Performs a query on scholar.google.com, and returns a dictionary
         of results in the form {'papers': ...}. Unfortunately, as of now,
         captchas can potentially prevent searches after a certain limit.
-
-
-        change to use pip install scholarly
-
         """
         start = 0
         results = {'papers': []}
@@ -254,36 +243,45 @@ class SciHub(object):
         """
         Uses scholarly to find publication information
 
-{'author_id': ['', '', '', ''],
- 'bib': {'abstract': 'The 2013 guidelines on hypertension of the European '
-                     'Society of Hypertension (ESH) and the  European Society '
-                     'of Cardiology (ESC) follow the guidelines jointly issued '
-                     'by the two societies  in 2003 and 2007. 1, 2 Publication '
-                     'of a new document 6 years after the previous one',
-         'author': ['ES Council', 'J Redon', 'K Narkiewicz', 'PM Nilsson'],
-         'pub_year': '2013',
-         'title': '2013 ESH/ESC guidelines for the management of arterial '
-                  'hypertension',
-         'venue': 'European Heart …'},
- 'citedby_url': '/scholar?cites=2024581817338419954&as_sdt=5,33&sciodt=0,33&hl=en',
- 'eprint_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
- 'filled': False,
- 'gsrank': 1,
- 'num_citations': 93,
- 'pub_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
- 'source': 'PUBLICATION_SEARCH_SNIPPET',
- 'url_add_sclib': '/citations?hl=en&xsrf=&continue=/scholar%3Fq%3D10.1093/eurheartj/eht151%250A%26hl%3Den%26as_sdt%3D0,33&citilm=1&update_op=library_add&info=8torqW_CGBwJ&ei=-FMKYu6YDomTy9YPj926gA8&json=',
- 'url_related_articles': '/scholar?q=related:8torqW_CGBwJ:scholar.google.com/&scioq=10.1093/eurheartj/eht151%0A&hl=en&as_sdt=0,33',
- 'url_scholarbib': '/scholar?q=info:8torqW_CGBwJ:scholar.google.com/&output=cite&scirp=0&hl=en'}
-
-
+        {'author_id': ['', '', '', ''],
+         'bib': {'abstract': 'The 2013 guidelines on hypertension of the European '
+                             'Society of Hypertension (ESH) and the  European Society '
+                             'of Cardiology (ESC) follow the guidelines jointly issued '
+                             'by the two societies  in 2003 and 2007. 1, 2 Publication '
+                             'of a new document 6 years after the previous one',
+                 'author': ['ES Council', 'J Redon', 'K Narkiewicz', 'PM Nilsson'],
+                 'pub_year': '2013',
+                 'title': '2013 ESH/ESC guidelines for the management of arterial '
+                          'hypertension',
+                 'venue': 'European Heart …'},
+         'citedby_url': '/scholar?cites=2024581817338419954&as_sdt=5,33&sciodt=0,33&hl=en',
+         'eprint_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
+         'filled': False,
+         'gsrank': 1,
+         'num_citations': 93,
+         'pub_url': 'https://www.cardio.dk/media/com_reditem/files/customfield/item/6717/esc_2013_htn.pdf',
+         'source': 'PUBLICATION_SEARCH_SNIPPET',
+         'url_add_sclib': '/citations?hl=en&xsrf=&continue=/scholar%3Fq%3D10.1093/eurheartj/eht151%250A%26hl%3Den%26as_sdt%3D0,33&citilm=1&update_op=library_add&info=8torqW_CGBwJ&ei=-FMKYu6YDomTy9YPj926gA8&json=',
+         'url_related_articles': '/scholar?q=related:8torqW_CGBwJ:scholar.google.com/&scioq=10.1093/eurheartj/eht151%0A&hl=en&as_sdt=0,33',
+         'url_scholarbib': '/scholar?q=info:8torqW_CGBwJ:scholar.google.com/&output=cite&scirp=0&hl=en'}
 
 
         """
+        print(identifier)
         search_query = scholarly.search_pubs(identifier)
-        scholarly.pprint(next(search_query))
+        
+        publication_info = {}
+        for pub in search_query:
+            print(pub['bib'])
+            print("Title: "+ pub['bib']['title'])
+            publication_info['title'] = str(pub['bib']['title'])
+            print("Publication date: " + pub['bib']['pub_year'])
+            publication_info['pub_year'] = str(pub['bib']['pub_year'])
+            print("Author: " + pub['bib']['author'][0])
+            publication_info['author'] = pub['bib']['author'][0]
+            break
 
-        return "Test"
+        return publication_info
 
 
 class CaptchaNeedException(Exception):
@@ -350,9 +348,17 @@ def main():
                 print('Removing ' + identifier)
                 #Now call function that IDs the paper and gets metadata - return a list of metadata
                 publication_info = sh._search_publication_information(identifier)
+                print(publication_info)
 
+                if(bool(publication_info)):
                 #Now call function that renames file according to my schema - based on list of metadata (if available)
-
+                    filename = publication_info['pub_year']+"_"+publication_info['author']+"_"+publication_info['title']+".pdf"
+                    print(filename)
+                    print(result['name'])
+                    shutil.move(result['name'], filename)
+                else:
+                    print("No publication information found.")
+                    continue
         f = open(args.file, "w")
         f.writelines(identifiers)
         f.close()
